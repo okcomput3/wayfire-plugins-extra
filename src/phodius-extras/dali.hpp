@@ -228,12 +228,12 @@ void main()
     
     // Key light from upper left
     vec3 key_light_dir = normalize(vec3(0.5, 0.7, 0.9));
-    vec3 key_light_color = vec3(1.0, 0.95, 0.85);
+    vec4 key_light_color = flame_color;
     float key_diffuse = max(0.0, dot(normal, key_light_dir));
     
     // Fill light from right
     vec3 fill_light_dir = normalize(vec3(-0.4, 0.3, 0.7));
-    vec3 fill_light_color = vec3(0.7, 0.8, 1.0);
+    vec4 fill_light_color = flame_color;
     float fill_diffuse = max(0.0, dot(normal, fill_light_dir)) * 0.3;
     
     // Specular
@@ -272,11 +272,11 @@ void main()
     vec3 shaded_color = color * ambient;
     
     // Add directional lighting
-    shaded_color += color * key_light_color * key_diffuse * 0.5 * light_intensity;
-    shaded_color += color * fill_light_color * fill_diffuse * light_intensity;
+    shaded_color += color * key_light_color.rgb * key_diffuse * 0.5 * light_intensity;
+    shaded_color += color * fill_light_color.rgb * fill_diffuse * light_intensity;
     
     // Specular and rim - fade in
-    shaded_color += key_light_color * specular * 0.4 * light_intensity;
+    shaded_color += key_light_color.rgb * specular * 0.4 * light_intensity;
     shaded_color += vec3(0.6, 0.7, 1.0) * fresnel * 0.15 * light_intensity;
     
     // Ambient occlusion - fade in
@@ -287,7 +287,7 @@ void main()
     lit_color = mix(color, shaded_color, light_intensity);
     
     // Warm Dalí tint - subtle
-    lit_color = mix(lit_color, lit_color * vec3(1.03, 1.0, 0.95), t * 0.3);
+    lit_color = mix(lit_color, lit_color * vec3(0.03, 0.0, 0.05), t * 0.3);
     
     // Fade out at end
     float fade_out = 1.0 - smoothstep(0.85, 1.0, t);
