@@ -488,7 +488,7 @@ class dali_transformer : public wf::scene::view_2d_transformer_t
     wf::geometry_t get_padded_bounding_box()
     {
         auto box     = this->get_children_bounding_box();
-        auto padding = 200;
+        auto padding = 250;
         box.x     -= padding;
         box.y     -= padding;
         box.width += padding * 2;
