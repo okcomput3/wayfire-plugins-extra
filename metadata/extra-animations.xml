@@ -1,0 +1,207 @@
+<?xml version="1.0"?>
+<wayfire>
+	<plugin name="extra-animations">
+		<_short>Extra Animations</_short>
+		<_long>Extra animations to extend animate plugin</_long>
+		<category>Effects</category>
+		<group>
+			<_short>Blinds Settings</_short>
+			<option name="blinds_duration" type="animation">
+				<_short>Blinds duration</_short>
+				<_long>Sets the duration for the blinds animation in milliseconds.</_long>
+				<default>700ms linear</default>
+			</option>
+			<option name="blinds_strip_height" type="int">
+				<_short>Blinds strip height</_short>
+				<_long>Height of each blinds strip in pixels.</_long>
+				<default>20</default>
+				<min>10</min>
+			</option>
+		</group>
+		<group>
+			<_short>Helix Settings</_short>
+			<option name="helix_duration" type="animation">
+				<_short>Helix duration</_short>
+				<_long>Sets the duration for the helix animation in milliseconds.</_long>
+				<default>700ms linear</default>
+			</option>
+			<option name="helix_rotations" type="int">
+				<_short>Helix rotations</_short>
+				<_long>Number of rotations for the helix animation.</_long>
+				<default>2</default>
+				<min>1</min>
+			</option>
+			<option name="helix_strip_height" type="int">
+				<_short>Helix strip height</_short>
+				<_long>Height of each helix strip in pixels.</_long>
+				<default>20</default>
+				<min>10</min>
+			</option>
+		</group>
+		<group>
+			<_short>Shatter Settings</_short>
+			<option name="shatter_duration" type="animation">
+				<_short>Shatter duration</_short>
+				<_long>Sets the duration for the shatter animation in milliseconds.</_long>
+				<default>1000ms linear</default>
+			</option>
+		</group>
+		<group>
+			<_short>Vortex Settings</_short>
+			<option name="vortex_duration" type="animation">
+				<_short>Vortex duration</_short>
+				<_long>Sets the duration for the vortex animation in milliseconds.</_long>
+				<default>1000ms linear</default>
+			</option>
+		</group>
+		<group>
+			<_short>Melt Settings</_short>
+			<option name="melt_duration" type="animation">
+				<_short>Melt duration</_short>
+				<_long>Sets the duration for the melt animation in milliseconds.</_long>
+				<default>1000ms linear</default>
+			</option>
+			<option name="melt_distortion_factor" type="int">
+				<_short>Melt distortion factor</_short>
+				<_long>Distortion factor for melt animation.</_long>
+				<default>20</default>
+				<min>1</min>
+			</option>
+		</group>
+		<group>
+			<_short>Burn Settings</_short>
+			<option name="burn_duration" type="animation">
+				<_short>Burn duration</_short>
+				<_long>Sets the duration for the burn animation in milliseconds.</_long>
+				<default>1000ms linear</default>
+			</option>
+			<option name="burn_flame_speed" type="double">
+				<_short>Burn flame speed</_short>
+				<_long>The speed at which the flames flicker.</_long>
+				<default>7</default>
+				<min>1</min>
+				<max>100</max>
+				<precision>1</precision>
+			</option>
+			<option name="burn_flame_width" type="double">
+				<_short>Burn flame width</_short>
+				<_long>The width of the flames.</_long>
+				<default>0.7</default>
+				<min>0.01</min>
+				<max>1.0</max>
+				<precision>0.01</precision>
+			</option>
+			<option name="burn_flame_height" type="double">
+				<_short>Burn flame height</_short>
+				<_long>The height of the flames.</_long>
+				<default>0.7</default>
+				<min>0.01</min>
+				<max>1.0</max>
+				<precision>0.01</precision>
+			</option>
+			<option name="burn_flame_smoothness" type="string">
+				<_short>Smoothness</_short>
+				<_long>How much dithering to use for the flames. Softest uses the least resources while Hard uses the most.</_long>
+				<default>normal</default>
+				<desc>
+					<value>softest</value>
+					<_name>Softest</_name>
+				</desc>
+				<desc>
+					<value>soft</value>
+					<_name>Soft</_name>
+				</desc>
+				<desc>
+					<value>normal</value>
+					<_name>Normal</_name>
+				</desc>
+				<desc>
+					<value>hard</value>
+					<_name>Hard</_name>
+				</desc>
+			</option>
+			<option name="burn_flame_color" type="color">
+				<_short>Flame Color</_short>
+				<_long>Color used for rendering the flames.</_long>
+				<default>1.00 0.33 0.16 1.00</default>
+			</option>
+		</group>
+		<group>
+			<_short>Magic Carpet Settings</_short>
+			<option name="carpet_roll_duration" type="animation">
+				<_short>Roll Duration</_short>
+				<_long>Sets the duration for the magic carpet animation in milliseconds.</_long>
+				<default>1000ms linear</default>
+			</option>
+			<option name="carpet_roll_direction" type="int">
+				<_short>Roll Direction</_short>
+				<_long>Choose from where the window unrolls for open animation. Left, right, top and bottom unroll from the selected edge. Horizontal and vertical scroll unrolls from the middle, much like an ancient scroll.</_long>
+				<default>0</default>
+				<desc>
+					<value>0</value>
+					<_name>Left</_name>
+				</desc>
+				<desc>
+					<value>1</value>
+					<_name>Right</_name>
+				</desc>
+				<desc>
+					<value>2</value>
+					<_name>Top</_name>
+				</desc>
+				<desc>
+					<value>3</value>
+					<_name>Bottom</_name>
+				</desc>
+				<desc>
+					<value>4</value>
+					<_name>Horizontal Scroll</_name>
+				</desc>
+				<desc>
+					<value>5</value>
+					<_name>Vertical Scroll</_name>
+				</desc>
+			</option>
+		</group>
+		<group>
+			<_short>Dodge Settings</_short>
+			<option name="dodge_toggle" type="bool">
+				<_short>Enable Dodge</_short>
+				<_long>Enables the Dodge focus animation.</_long>
+				<default>false</default>
+			</option>
+			<option name="dodge_duration" type="animation">
+				<_short>Duration</_short>
+				<_long>Sets the animation duration in milliseconds.</_long>
+				<default>350ms linear</default>
+			</option>
+			<option name="dodge_rotate" type="bool">
+				<_short>Rotate</_short>
+				<_long>Rotate windows during animation.</_long>
+				<default>false</default>
+			</option>
+			<option name="dodge_zoom" type="bool">
+				<_short>Zoom</_short>
+				<_long>Slightly increase zoom for the focusing window during animation.</_long>
+				<default>true</default>
+			</option>
+			<option name="dodge_direction" type="string">
+				<_short>Animation Direction</_short>
+				<_long>Sets the animation direction.</_long>
+				<desc>
+					<value>cardinal</value>
+					<_name>Cardinal</_name>
+				</desc>
+				<desc>
+					<value>diagonal</value>
+					<_name>Diagonal</_name>
+				</desc>
+				<desc>
+					<value>circular</value>
+					<_name>Circular</_name>
+				</desc>
+				<default>cardinal</default>
+			</option>
+		</group>
+	</plugin>
+</wayfire>

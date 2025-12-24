@@ -8,15 +8,15 @@ autorotate = shared_module('autorotate-iio', 'autorotate-iio.cpp',
     install: true, install_dir: join_paths(get_option('libdir'), 'wayfire'))
 endif
 
-background_view = shared_module('background-view', 'background-view.cpp',
-    dependencies: [wayfire, wf_protos],
-    install: true, install_dir: join_paths(get_option('libdir'), 'wayfire'))
-
 benchmark = shared_module('bench', 'bench.cpp',
     dependencies: [wayfire],
     install: true, install_dir: join_paths(get_option('libdir'), 'wayfire'))
 
 crosshair = shared_module('crosshair', 'crosshair.cpp',
+    dependencies: [wayfire],
+    install: true, install_dir: join_paths(get_option('libdir'), 'wayfire'))
+
+fisheye = shared_module('fisheye', 'fisheye.cpp',
     dependencies: [wayfire],
     install: true, install_dir: join_paths(get_option('libdir'), 'wayfire'))
 
@@ -33,6 +33,10 @@ follow_focus = shared_module('follow-focus', 'follow-focus.cpp',
     install: true, install_dir: join_paths(get_option('libdir'), 'wayfire'))
 
 force_fullscreen = shared_module('force-fullscreen', 'force-fullscreen.cpp',
+    dependencies: [wayfire],
+    install: true, install_dir: join_paths(get_option('libdir'), 'wayfire'))
+
+ghost = shared_module('ghost', 'ghost.cpp',
     dependencies: [wayfire],
     install: true, install_dir: join_paths(get_option('libdir'), 'wayfire'))
 
@@ -58,13 +62,19 @@ magnifier = shared_module('mag', 'mag.cpp',
     dependencies: [wayfire],
     install: true, install_dir: join_paths(get_option('libdir'), 'wayfire'))
 
-if json.found()
 obs = shared_module('obs', 'obs.cpp',
-    dependencies: [wayfire, json],
+    dependencies: [wayfire],
     install: true, install_dir: join_paths(get_option('libdir'), 'wayfire'))
-endif
+
+pin_view = shared_module('pin-view', 'pin-view.cpp',
+    dependencies: [wayfire],
+    install: true, install_dir: join_paths(get_option('libdir'), 'wayfire'))
 
 showrepaint = shared_module('showrepaint', 'showrepaint.cpp',
+    dependencies: [wayfire],
+    install: true, install_dir: join_paths(get_option('libdir'), 'wayfire'))
+
+showtouch = shared_module('showtouch', 'showtouch.cpp',
     dependencies: [wayfire],
     install: true, install_dir: join_paths(get_option('libdir'), 'wayfire'))
 
@@ -84,7 +94,4 @@ workspace_names = shared_module('workspace-names', 'workspace-names.cpp',
     dependencies: [wayfire],
     install: true, install_dir: join_paths(get_option('libdir'), 'wayfire'))
 
-hinge = shared_module('hinge', 'hinge.cpp',
-    dependencies: [wayfire],
-    install: true, install_dir: join_paths(get_option('libdir'), 'wayfire'))
-
+subdir('extra-animations')

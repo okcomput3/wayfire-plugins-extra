@@ -22,18 +22,7 @@
  * SOFTWARE.
  */
 
-/*
- * To set a workspace name, use the following option format:
- *
- * [workspace-names]
- * HDMI-A-1_workspace_3 = Foo
- *
- * This will show Foo when switching to workspace 3 on HDMI-A-1.
- * Enabling show_option_names will show all possible option names
- * on the respective workspaces and outputs.
- */
-
-#include <map>
+#include <wayfire/bindings.hpp>
 #include <wayfire/geometry.hpp>
 #include <wayfire/workarea.hpp>
 #include <wayfire/opengl.hpp>
@@ -53,6 +42,7 @@
 #include <wayfire/per-output-plugin.hpp>
 #include <wayfire/signal-definitions.hpp>
 #include <wayfire/plugins/common/cairo-util.hpp>
+#include <wayfire/config/config-manager.hpp>
 
 #define WIDGET_PADDING 20
 
@@ -60,7 +50,7 @@ struct workspace_name
 {
     wf::geometry_t rect;
     std::string name;
-    std::unique_ptr<wf::simple_texture_t> texture;
+    std::unique_ptr<wf::owned_texture_t> texture;
     cairo_t *cr = nullptr;
     cairo_surface_t *cairo_surface;
     cairo_text_extents_t text_extents;
@@ -101,7 +91,7 @@ class simple_node_render_instance_t : public render_instance_t
 
     void schedule_instructions(
         std::vector<render_instruction_t>& instructions,
-        const wf::render_target_t& target, wf::region_t& damage)
+        const wf::render_target_t& target, wf::region_t& damage) override
     {
         // We want to render ourselves only, the node does not have children
         instructions.push_back(render_instruction_t{
@@ -111,22 +101,26 @@ class simple_node_render_instance_t : public render_instance_t
                     });
     }
 
-    void render(const wf::render_target_t& target,
-        const wf::region_t& region)
+    void render(const wf::scene::render_instruction_t& data) override
     {
         wf::geometry_t g{workspace->rect.x + offset->x,
             workspace->rect.y + offset->y,
             workspace->rect.width, workspace->rect.height};
-        OpenGL::render_begin(target);
-        for (auto& box : region)
+        if (workspace->texture)
         {
-            target.logic_scissor(wlr_box_from_pixman_box(box));
-            OpenGL::render_texture(wf::texture_t{workspace->texture->tex},
-                target, g, glm::vec4(1, 1, 1, *alpha_fade),
-                OpenGL::TEXTURE_TRANSFORM_INVERT_Y);
-        }
+            data.pass->custom_gles_subpass(data.target, [&]
+            {
+                wf::gles::bind_render_buffer(data.target);
+                for (auto& box : data.damage)
+                {
+                    wf::gles::render_target_logic_scissor(data.target, wlr_box_from_pixman_box(box));
+                    OpenGL::render_texture(wf::gles_texture_t{workspace->texture->get_texture()},
+                        data.target, g, glm::vec4(1, 1, 1, *alpha_fade), 0);
+                }
 
-        OpenGL::render_end();
+                wf::scene::damage_node(self, g);
+            });
+        }
     }
 };
 
@@ -206,7 +200,9 @@ class wayfire_workspace_names_output : public wf::per_output_plugin_instance_t
     wf::option_wrapper_t<wf::color_t> background_color{
         "workspace-names/background_color"};
     wf::option_wrapper_t<bool> show_option_names{"workspace-names/show_option_names"};
+    wf::option_wrapper_t<bool> show_option_values{"workspace-names/show_option_values"};
     wf::animation::simple_animation_t alpha_fade{display_duration};
+    wf::option_wrapper_t<wf::config::compound_list_t<std::string>> workspace_names{"workspace-names/names"};
 
   public:
     void init() override
@@ -278,27 +274,44 @@ class wayfire_workspace_names_output : public wf::per_output_plugin_instance_t
 
     void update_name(int x, int y)
     {
-        auto section = wf::get_core().config.get_section("workspace-names");
+        auto section = wf::get_core().config->get_section("workspace-names");
         auto wsize   = output->wset()->get_workspace_grid_size();
         auto wsn     = workspaces[x][y]->workspace;
         int ws_num   = x + y * wsize.width + 1;
 
-        if (show_option_names)
+        // Get the option name (key) of the target workspace
+        std::string key = output->to_string() + "_workspace_" + std::to_string(ws_num);
+
+        if (show_option_names && !show_option_values)
         {
-            wsn->name = output->to_string() + "_workspace_" +
-                std::to_string(ws_num);
+            wsn->name = key;
         } else
         {
             bool option_found = false;
             for (auto option : section->get_registered_options())
             {
                 int ws;
-                if (sscanf(option->get_name().c_str(),
-                    (output->to_string() + "_workspace_%d").c_str(), &ws) == 1)
+                if (sscanf(option->get_name().c_str(), (output->to_string() + "_workspace_%d").c_str(),
+                    &ws) != 1)
                 {
-                    if (ws == ws_num)
+                    continue;
+                }
+
+                if (ws == ws_num)
+                {
+                    wsn->name    = option->get_value_str();
+                    option_found = true;
+                    break;
+                }
+            }
+
+            if (!option_found)
+            {
+                for (const auto& [wsid, wsname] : workspace_names.value())
+                {
+                    if (wsid == key)
                     {
-                        wsn->name    = option->get_value_str();
+                        wsn->name    = wsname;
                         option_found = true;
                         break;
                     }
@@ -357,7 +370,6 @@ class wayfire_workspace_names_output : public wf::per_output_plugin_instance_t
             /* Setup dummy context to get initial font size */
             cairo_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1, 1);
             cr = cairo_create(cairo_surface);
-            wsn->texture = std::make_unique<wf::simple_texture_t>();
         }
 
         cairo_select_font_face(cr, std::string(
@@ -496,9 +508,7 @@ class wayfire_workspace_names_output : public wf::per_output_plugin_instance_t
         cairo_show_text(cr, name);
         cairo_stroke(cr);
 
-        OpenGL::render_begin();
-        cairo_surface_upload_to_texture(wsn->cairo_surface, *wsn->texture);
-        OpenGL::render_end();
+        wsn->texture = std::make_unique<wf::owned_texture_t>(wsn->cairo_surface);
     }
 
     void set_alpha()
@@ -627,8 +637,6 @@ class wayfire_workspace_names_output : public wf::per_output_plugin_instance_t
                 auto& wsn = workspaces[x][y]->workspace;
                 cairo_surface_destroy(wsn->cairo_surface);
                 cairo_destroy(wsn->cr);
-                wsn->texture->release();
-                wsn->texture.reset();
                 wf::scene::remove_child(workspaces[x][y]);
                 workspaces[x][y].reset();
             }

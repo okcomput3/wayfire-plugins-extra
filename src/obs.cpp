@@ -23,6 +23,7 @@
  */
 
 #include <wayfire/core.hpp>
+#include <wayfire/opengl.hpp>
 #include <wayfire/view.hpp>
 #include <wayfire/plugin.hpp>
 #include <wayfire/output.hpp>
@@ -40,16 +41,14 @@ static const char *vertex_shader =
     R"(
 #version 100
 
-attribute mediump vec2 position;
-attribute mediump vec2 texcoord;
+attribute highp vec2 position;
+attribute highp vec2 texcoord;
 
-varying mediump vec2 uvpos;
-
-uniform mat4 mvp;
+varying highp vec2 uvpos;
 
 void main() {
 
-   gl_Position = mvp * vec4(position.xy, 0.0, 1.0);
+   gl_Position = vec4(position.xy, 0.0, 1.0);
    uvpos = texcoord;
 }
 )";
@@ -60,14 +59,14 @@ static const char *fragment_shader =
 @builtin_ext@
 @builtin@
 
-precision mediump float;
+precision highp float;
 
 /* Input uniforms are 0-1 range. */
-uniform mediump float opacity;
-uniform mediump float brightness;
-uniform mediump float saturation;
+uniform highp float opacity;
+uniform highp float brightness;
+uniform highp float saturation;
 
-varying mediump vec2 uvpos;
+varying highp vec2 uvpos;
 
 vec3 saturate(vec3 rgb, float adjustment)
 {
@@ -105,9 +104,10 @@ class wf_obs : public wf::scene::view_2d_transformer_t
     std::unique_ptr<wf::animation::simple_animation_t> opacity;
     std::unique_ptr<wf::animation::simple_animation_t> brightness;
     std::unique_ptr<wf::animation::simple_animation_t> saturation;
+    bool hook_set = false;
 
   public:
-    class simple_node_render_instance_t : public wf::scene::transformer_render_instance_t<node_t>
+    class simple_node_render_instance_t : public wf::scene::transformer_render_instance_t<wf_obs>
     {
         wf::signal::connection_t<node_damage_signal> on_node_damaged =
             [=] (node_damage_signal *ev)
@@ -117,13 +117,12 @@ class wf_obs : public wf::scene::view_2d_transformer_t
 
         wf_obs *self;
         wayfire_view view;
-        wf::output_t *wo = nullptr;
-        wf::effect_hook_t pre_hook;
         damage_callback push_to_parent;
+        wf::auxilliary_buffer_t buffer;
 
       public:
         simple_node_render_instance_t(wf_obs *self, damage_callback push_damage,
-            wayfire_view view) : wf::scene::transformer_render_instance_t<node_t>(self,
+            wayfire_view view) : wf::scene::transformer_render_instance_t<wf_obs>(self,
                 push_damage,
                 view->get_output())
         {
@@ -131,71 +130,33 @@ class wf_obs : public wf::scene::view_2d_transformer_t
             this->view = view;
             this->push_to_parent = push_damage;
             self->connect(&on_node_damaged);
-
-            if (view->get_output())
-            {
-                wo = view->get_output();
-                pre_hook = [=] ()
-                {
-                    if (this->self->progression_running())
-                    {
-                        this->view->damage();
-                    } else
-                    {
-                        wo->render->rem_effect(&pre_hook);
-                        if (this->self->transformer_inert() &&
-                            view->get_transformed_node()->get_transformer(transformer_name))
-                        {
-                            self->disconnect(&on_node_damaged);
-                            view->get_transformed_node()->rem_transformer(transformer_name);
-                        }
-                    }
-                };
-            }
         }
 
         ~simple_node_render_instance_t()
         {
-            if (wo)
-            {
-                wo->render->rem_effect(&pre_hook);
-            }
+            self->disconnect(&on_node_damaged);
         }
 
-        void schedule_instructions(
-            std::vector<render_instruction_t>& instructions,
-            const wf::render_target_t& target, wf::region_t& damage)
+        void schedule_instructions(std::vector<render_instruction_t>& instructions,
+            const wf::render_target_t& target, wf::region_t& damage) override
         {
             // We want to render ourselves only, the node does not have children
             instructions.push_back(render_instruction_t{
                             .instance = this,
                             .target   = target,
-                            .damage   = damage & self->get_bounding_box(),
+                            .damage   = damage,
                         });
-            if (wo && this->self->progression_running())
-            {
-                wo->render->add_effect(&pre_hook, wf::OUTPUT_EFFECT_PRE);
-            }
         }
 
-        void render(const wf::render_target_t& target,
-            const wf::region_t& region)
+        void render(const wf::scene::render_instruction_t& data) override
         {
-            wlr_box fb_geom =
-                target.framebuffer_box_from_geometry_box(target.geometry);
-            auto view_box = target.framebuffer_box_from_geometry_box(
-                self->get_children_bounding_box());
-            view_box.x -= fb_geom.x;
-            view_box.y -= fb_geom.y;
-
-            float x = view_box.x, y = view_box.y, w = view_box.width,
-                h = view_box.height;
+            auto view_box = self->get_bounding_box();
 
             static const float vertexData[] = {
-                -1.0f, -1.0f,
-                1.0f, -1.0f,
+                -1.0f, 1.0f,
                 1.0f, 1.0f,
-                -1.0f, 1.0f
+                1.0f, -1.0f,
+                -1.0f, -1.0f
             };
             static const float texCoords[] = {
                 0.0f, 0.0f,
@@ -204,42 +165,42 @@ class wf_obs : public wf::scene::view_2d_transformer_t
                 0.0f, 1.0f
             };
 
-            OpenGL::render_begin(target);
-
-            /* Upload data to shader */
-            auto src_tex = wf::scene::transformer_render_instance_t<node_t>::get_texture(
-                1.0);
-            this->self->program->use(src_tex.type);
-            this->self->program->uniform1f("opacity", this->self->get_opacity());
-            this->self->program->uniform1f("brightness", this->self->get_brightness());
-            this->self->program->uniform1f("saturation", this->self->get_saturation());
-            this->self->program->attrib_pointer("position", 2, 0, vertexData);
-            this->self->program->attrib_pointer("texcoord", 2, 0, texCoords);
-            this->self->program->uniformMatrix4f("mvp", target.transform);
-            GL_CALL(glActiveTexture(GL_TEXTURE0));
-            this->self->program->set_active_texture(src_tex);
-
-            /* Render it to target */
-            target.bind();
-            GL_CALL(glViewport(x, fb_geom.height - y - h, w, h));
-
-            GL_CALL(glEnable(GL_BLEND));
-            GL_CALL(glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA));
-
-            for (const auto& box : region)
+            auto src_tex = get_texture(1.0);
+            auto gl_tex  = wf::gles_texture_t{src_tex};
+            data.pass->custom_gles_subpass(data.target, [&]
             {
-                target.logic_scissor(wlr_box_from_pixman_box(box));
+                buffer.allocate({int(view_box.width), int(view_box.height)});
+                wf::gles::bind_render_buffer(buffer.get_renderbuffer());
+                wf::gles_texture_t final_tex{buffer.get_texture()};
+                OpenGL::clear(wf::color_t{0.0, 0.0, 0.0, 0.0});
+                /* Upload data to shader */
+                this->self->program->use(gl_tex.type);
+                this->self->program->uniform1f("opacity", this->self->get_opacity());
+                this->self->program->uniform1f("brightness", this->self->get_brightness());
+                this->self->program->uniform1f("saturation", this->self->get_saturation());
+                this->self->program->attrib_pointer("position", 2, 0, vertexData);
+                this->self->program->attrib_pointer("texcoord", 2, 0, texCoords);
+                GL_CALL(glActiveTexture(GL_TEXTURE0));
+                this->self->program->set_active_texture(gl_tex);
                 GL_CALL(glDrawArrays(GL_TRIANGLE_FAN, 0, 4));
-            }
+                this->self->program->deactivate();
 
-            /* Disable stuff */
-            GL_CALL(glDisable(GL_BLEND));
-            GL_CALL(glActiveTexture(GL_TEXTURE0));
-            GL_CALL(glBindTexture(GL_TEXTURE_2D, 0));
-            GL_CALL(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+                /* Render it to target */
+                wf::gles::bind_render_buffer(data.target);
 
-            this->self->program->deactivate();
-            OpenGL::render_end();
+                for (const auto& box : data.damage)
+                {
+                    wf::gles::render_target_logic_scissor(data.target, wlr_box_from_pixman_box(box));
+                    OpenGL::render_transformed_texture(final_tex, view_box,
+                        wf::gles::render_target_orthographic_projection(data.target),
+                        glm::vec4(1.0), 0);
+                }
+
+                /* Disable stuff */
+                GL_CALL(glBindTexture(GL_TEXTURE_2D, 0));
+                GL_CALL(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+                buffer.free();
+            });
         }
     };
 
@@ -264,12 +225,40 @@ class wf_obs : public wf::scene::view_2d_transformer_t
             this, push_damage, view));
     }
 
+    wf::effect_hook_t pre_hook = [=] ()
+    {
+        if (this->progression_running())
+        {
+            view->damage();
+        } else if (this->transformer_inert() &&
+                   view->get_transformed_node()->get_transformer<wf_obs>(transformer_name))
+        {
+            view->get_output()->render->rem_effect(&pre_hook);
+            view->get_transformed_node()->rem_transformer<wf_obs>(transformer_name);
+        }
+    };
+
+    void set_hook()
+    {
+        if (this->hook_set)
+        {
+            return;
+        }
+
+        if (auto output = view->get_output())
+        {
+            output->render->add_effect(&pre_hook, wf::OUTPUT_EFFECT_PRE);
+            this->hook_set = true;
+        }
+    }
+
     void set_opacity_duration(int duration)
     {
         double o = *opacity;
         opacity.reset();
         opacity = std::make_unique<wf::animation::simple_animation_t>(wf::create_option<int>(duration));
         opacity->set(o, o);
+        set_hook();
     }
 
     void set_brightness_duration(int duration)
@@ -278,6 +267,7 @@ class wf_obs : public wf::scene::view_2d_transformer_t
         brightness.reset();
         brightness = std::make_unique<wf::animation::simple_animation_t>(wf::create_option<int>(duration));
         brightness->set(b, b);
+        set_hook();
     }
 
     void set_saturation_duration(int duration)
@@ -286,6 +276,7 @@ class wf_obs : public wf::scene::view_2d_transformer_t
         saturation.reset();
         saturation = std::make_unique<wf::animation::simple_animation_t>(wf::create_option<int>(duration));
         saturation->set(s, s);
+        set_hook();
     }
 
     bool transformer_inert()
@@ -341,20 +332,24 @@ class wf_obs : public wf::scene::view_2d_transformer_t
         opacity.reset();
         brightness.reset();
         saturation.reset();
+
+        for (auto & output : wf::get_core().output_layout->get_outputs())
+        {
+            output->render->rem_effect(&pre_hook);
+        }
     }
 };
 
 class wayfire_obs : public wf::plugin_interface_t
 {
     OpenGL::program_t program;
-    std::map<wayfire_view, std::shared_ptr<wf_obs>> transformers;
     wf::shared_data::ref_ptr_t<wf::ipc::method_repository_t> ipc_repo;
 
     void pop_transformer(wayfire_view view)
     {
-        if (view->get_transformed_node()->get_transformer(transformer_name))
+        if (view->get_transformed_node()->get_transformer<wf_obs>(transformer_name))
         {
-            view->get_transformed_node()->rem_transformer(transformer_name);
+            view->get_transformed_node()->rem_transformer<wf_obs>(transformer_name);
         }
     }
 
@@ -369,19 +364,26 @@ class wayfire_obs : public wf::plugin_interface_t
   public:
     void init() override
     {
+        if (!wf::get_core().is_gles2())
+        {
+            LOGE("obs plugin requires GLES2 renderer!");
+            return;
+        }
+
         ipc_repo->register_method("wf/obs/set-view-opacity", ipc_set_view_opacity);
         ipc_repo->register_method("wf/obs/set-view-brightness", ipc_set_view_brightness);
         ipc_repo->register_method("wf/obs/set-view-saturation", ipc_set_view_saturation);
 
-        OpenGL::render_begin();
-        program.compile(vertex_shader, fragment_shader);
-        OpenGL::render_end();
+        wf::gles::run_in_context([&]
+        {
+            program.compile(vertex_shader, fragment_shader);
+        });
     }
 
     std::shared_ptr<wf_obs> ensure_transformer(wayfire_view view)
     {
         auto tmgr = view->get_transformed_node();
-        if (!tmgr->get_transformer<wf::scene::node_t>(transformer_name))
+        if (!tmgr->get_transformer<wf_obs>(transformer_name))
         {
             auto node = std::make_shared<wf_obs>(view, &program);
             tmgr->add_transformer(node, wf::TRANSFORMER_2D, transformer_name);
@@ -392,30 +394,39 @@ class wayfire_obs : public wf::plugin_interface_t
 
     void adjust_opacity(wayfire_view view, float opacity, int duration)
     {
-        transformers[view]->set_opacity(opacity, duration);
+        if (auto tr = view->get_transformed_node()->get_transformer<wf_obs>(transformer_name))
+        {
+            tr->set_opacity(opacity, duration);
+        }
     }
 
     void adjust_brightness(wayfire_view view, float brightness, int duration)
     {
-        transformers[view]->set_brightness(brightness, duration);
+        if (auto tr = view->get_transformed_node()->get_transformer<wf_obs>(transformer_name))
+        {
+            tr->set_brightness(brightness, duration);
+        }
     }
 
     void adjust_saturation(wayfire_view view, float saturation, int duration)
     {
-        transformers[view]->set_saturation(saturation, duration);
+        if (auto tr = view->get_transformed_node()->get_transformer<wf_obs>(transformer_name))
+        {
+            tr->set_saturation(saturation, duration);
+        }
     }
 
-    wf::ipc::method_callback ipc_set_view_opacity = [=] (nlohmann::json data) -> nlohmann::json
+    wf::ipc::method_callback ipc_set_view_opacity = [=] (wf::json_t data) -> wf::json_t
     {
-        WFJSON_EXPECT_FIELD(data, "view-id", number_unsigned);
-        WFJSON_EXPECT_FIELD(data, "opacity", number);
-        WFJSON_EXPECT_FIELD(data, "duration", number);
+        auto view_id  = wf::ipc::json_get_uint64(data, "view-id");
+        auto opacity  = wf::ipc::json_get_double(data, "opacity");
+        auto duration = wf::ipc::json_get_uint64(data, "duration");
 
-        auto view = wf::ipc::find_view_by_id(data["view-id"]);
+        auto view = wf::ipc::find_view_by_id(view_id);
         if (view && view->is_mapped())
         {
-            transformers[view] = ensure_transformer(view);
-            adjust_opacity(view, data["opacity"], data["duration"]);
+            ensure_transformer(view);
+            adjust_opacity(view, opacity, duration);
         } else
         {
             return wf::ipc::json_error("Failed to find view with given id. Maybe it was closed?");
@@ -424,17 +435,17 @@ class wayfire_obs : public wf::plugin_interface_t
         return wf::ipc::json_ok();
     };
 
-    wf::ipc::method_callback ipc_set_view_brightness = [=] (nlohmann::json data) -> nlohmann::json
+    wf::ipc::method_callback ipc_set_view_brightness = [=] (wf::json_t data) -> wf::json_t
     {
-        WFJSON_EXPECT_FIELD(data, "view-id", number_unsigned);
-        WFJSON_EXPECT_FIELD(data, "brightness", number);
-        WFJSON_EXPECT_FIELD(data, "duration", number);
+        auto view_id    = wf::ipc::json_get_uint64(data, "view-id");
+        auto brightness = wf::ipc::json_get_double(data, "brightness");
+        auto duration   = wf::ipc::json_get_uint64(data, "duration");
 
-        auto view = wf::ipc::find_view_by_id(data["view-id"]);
+        auto view = wf::ipc::find_view_by_id(view_id);
         if (view && view->is_mapped())
         {
-            transformers[view] = ensure_transformer(view);
-            adjust_brightness(view, data["brightness"], data["duration"]);
+            ensure_transformer(view);
+            adjust_brightness(view, brightness, duration);
         } else
         {
             return wf::ipc::json_error("Failed to find view with given id. Maybe it was closed?");
@@ -443,17 +454,17 @@ class wayfire_obs : public wf::plugin_interface_t
         return wf::ipc::json_ok();
     };
 
-    wf::ipc::method_callback ipc_set_view_saturation = [=] (nlohmann::json data) -> nlohmann::json
+    wf::ipc::method_callback ipc_set_view_saturation = [=] (wf::json_t data) -> wf::json_t
     {
-        WFJSON_EXPECT_FIELD(data, "view-id", number_unsigned);
-        WFJSON_EXPECT_FIELD(data, "saturation", number);
-        WFJSON_EXPECT_FIELD(data, "duration", number);
+        auto view_id    = wf::ipc::json_get_uint64(data, "view-id");
+        auto saturation = wf::ipc::json_get_double(data, "saturation");
+        auto duration   = wf::ipc::json_get_uint64(data, "duration");
 
-        auto view = wf::ipc::find_view_by_id(data["view-id"]);
+        auto view = wf::ipc::find_view_by_id(view_id);
         if (view && view->is_mapped())
         {
-            transformers[view] = ensure_transformer(view);
-            adjust_saturation(view, data["saturation"], data["duration"]);
+            ensure_transformer(view);
+            adjust_saturation(view, saturation, duration);
         } else
         {
             return wf::ipc::json_error("Failed to find view with given id. Maybe it was closed?");
@@ -470,9 +481,10 @@ class wayfire_obs : public wf::plugin_interface_t
 
         remove_transformers();
 
-        OpenGL::render_begin();
-        program.free_resources();
-        OpenGL::render_end();
+        wf::gles::run_in_context_if_gles([&]
+        {
+            program.free_resources();
+        });
     }
 };
 }

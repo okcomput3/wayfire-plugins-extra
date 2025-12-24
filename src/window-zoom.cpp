@@ -49,7 +49,7 @@ static wf::pointf_t get_center(wf::geometry_t view)
     };
 }
 
-class simple_node_render_instance_t : public transformer_render_instance_t<node_t>
+class simple_node_render_instance_t : public transformer_render_instance_t<transformer_base_node_t>
 {
     wf::signal::connection_t<node_damage_signal> on_node_damaged =
         [=] (node_damage_signal *ev)
@@ -65,10 +65,10 @@ class simple_node_render_instance_t : public transformer_render_instance_t<node_
     wf::option_wrapper_t<bool> nearest_filtering{"winzoom/nearest_filtering"};
 
   public:
-    simple_node_render_instance_t(node_t *self, damage_callback push_damage,
+    simple_node_render_instance_t(transformer_base_node_t *self, damage_callback push_damage,
         wayfire_toplevel_view view, float *scale_x, float *scale_y,
         wlr_box *transformed_view_geometry) :
-        transformer_render_instance_t<node_t>(self, push_damage,
+        transformer_render_instance_t<transformer_base_node_t>(self, push_damage,
             view->get_output())
     {
         this->self    = self;
@@ -119,25 +119,12 @@ class simple_node_render_instance_t : public transformer_render_instance_t<node_
         return *transformed_view_geometry;
     }
 
-    void render(const wf::render_target_t& target,
-        const wf::region_t& region) override
+    void render(const wf::scene::render_instruction_t& data) override
     {
-        auto src_tex = transformer_render_instance_t<node_t>::get_texture(1.0);
-
-        OpenGL::render_begin(target);
-        GL_CALL(glBindTexture(GL_TEXTURE_2D, src_tex.tex_id));
-        GL_CALL(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,
-            nearest_filtering ? GL_NEAREST : GL_LINEAR));
-        GL_CALL(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
-            nearest_filtering ? GL_NEAREST : GL_LINEAR));
+        auto src_tex = get_texture(1.0);
         auto scaled_geometry = get_scaled_geometry();
-        for (const auto& box : region)
-        {
-            target.logic_scissor(wlr_box_from_pixman_box(box));
-            OpenGL::render_texture(src_tex, target, scaled_geometry, glm::vec4(1.0));
-        }
-
-        OpenGL::render_end();
+        src_tex.filter_mode = nearest_filtering ? WLR_SCALE_FILTER_NEAREST : WLR_SCALE_FILTER_BILINEAR;
+        data.pass->add_texture(src_tex, data.target, scaled_geometry, data.damage);
     }
 };
 
@@ -317,7 +304,7 @@ class wayfire_winzoom : public wf::per_output_plugin_instance_t
     wf::axis_callback axis_cb = [=] (wlr_pointer_axis_event *ev)
     {
         auto view = toplevel_cast(wf::get_core().get_cursor_focus_view());
-        if (ev->orientation == WLR_AXIS_ORIENTATION_VERTICAL)
+        if (ev->orientation == WL_POINTER_AXIS_VERTICAL_SCROLL)
         {
             auto delta = (int)-std::clamp(ev->delta, -1.0, 1.0);
             return update_winzoom(view, wf::point_t{delta, delta});
