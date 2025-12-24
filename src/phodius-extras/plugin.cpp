@@ -22,8 +22,7 @@
  * SOFTWARE.
  */
 
-
-#include <wayfire/core.hpp>  // ADD THIS - needed for wf::get_core()
+#include <wayfire/core.hpp>  
 #include <wayfire/view.hpp>
 #include <wayfire/plugin.hpp>
 #include <wayfire/plugins/animate/animate.hpp>
