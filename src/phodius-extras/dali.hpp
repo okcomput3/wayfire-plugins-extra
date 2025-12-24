@@ -56,10 +56,9 @@ varying highp vec2 uvpos;
 uniform vec2 size;
 uniform float progress;
 uniform int direction;
-uniform float flame_speed;
-uniform float flame_width;
-uniform float flame_height;
-uniform vec4 flame_color;
+uniform float dali_speed;
+uniform float dali_height;
+uniform vec4 dali_color;
 uniform float window_seed;
 // ============================================
 // DALÍ MELTING CLOCK
@@ -169,11 +168,11 @@ void main()
     vec2 zoomed_p = p * zoom;
     
     // Warp strength
-    float strength = t2 * (60.0 + flame_speed * 0.04) * effect_fade;
+    float strength = t2 * (60.0 + dali_speed * 0.04) * effect_fade;
     
     // Check if below droop cutoff
     float bottom_edge = -1.5 * zoom;
-    float droop_amount = strength * (0.6 + flame_height * 0.004);
+    float droop_amount = strength * (0.6 + dali_height * 0.004);
     float normalized_x = zoomed_p.x / (0.5 * aspect * zoom);
     float parabola = max(0.0, 1.0 - normalized_x * normalized_x);
     float droop_at_x = droop_amount * parabola;
@@ -228,12 +227,12 @@ void main()
     
     // Key light from upper left
     vec3 key_light_dir = normalize(vec3(0.5, 0.7, 0.9));
-    vec4 key_light_color = flame_color;
+    vec3 key_light_color = vec3(1.0, 0.95, 0.85);
     float key_diffuse = max(0.0, dot(normal, key_light_dir));
     
     // Fill light from right
     vec3 fill_light_dir = normalize(vec3(-0.4, 0.3, 0.7));
-    vec4 fill_light_color = flame_color;
+    vec3 fill_light_color = vec3(0.7, 0.8, 1.0);
     float fill_diffuse = max(0.0, dot(normal, fill_light_dir)) * 0.3;
     
     // Specular
@@ -272,11 +271,11 @@ void main()
     vec3 shaded_color = color * ambient;
     
     // Add directional lighting
-    shaded_color += color * key_light_color.rgb * key_diffuse * 0.5 * light_intensity;
-    shaded_color += color * fill_light_color.rgb * fill_diffuse * light_intensity;
+    shaded_color += color * key_light_color * key_diffuse * 0.5 * light_intensity;
+    shaded_color += color * fill_light_color * fill_diffuse * light_intensity;
     
     // Specular and rim - fade in
-    shaded_color += key_light_color.rgb * specular * 0.4 * light_intensity;
+    shaded_color += key_light_color * specular * 0.4 * light_intensity;
     shaded_color += vec3(0.6, 0.7, 1.0) * fresnel * 0.15 * light_intensity;
     
     // Ambient occlusion - fade in
@@ -287,7 +286,7 @@ void main()
     lit_color = mix(color, shaded_color, light_intensity);
     
     // Warm Dalí tint - subtle
-    lit_color = mix(lit_color, lit_color * vec3(0.03, 0.0, 0.05), t * 0.3);
+    lit_color = mix(lit_color, lit_color * vec3(1.03, 1.0, 0.95), t * 0.3);
     
     // Fade out at end
     float fade_out = 1.0 - smoothstep(0.85, 1.0, t);
@@ -308,11 +307,10 @@ using namespace wf::animation;
 static std::string dali_transformer_name = "animation-dali";
 static uint32_t window_counter = 0;
 
-wf::option_wrapper_t<double> dali_flame_speed{"phodius-extras/dali_flame_speed"};
-wf::option_wrapper_t<double> dali_flame_width{"phodius-extras/dali_flame_width"};
-wf::option_wrapper_t<double> dali_flame_height{"phodius-extras/dali_flame_height"};
-wf::option_wrapper_t<wf::color_t> dali_flame_color{"phodius-extras/dali_flame_color"};
-wf::option_wrapper_t<std::string> dali_flame_smoothness{"phodius-extras/dali_flame_smoothness"};
+wf::option_wrapper_t<double> dali_speed{"phodius-extras/dali_speed"};
+wf::option_wrapper_t<double> dali_width{"phodius-extras/dali_width"};
+wf::option_wrapper_t<double> dali_height{"phodius-extras/dali_height"};
+wf::option_wrapper_t<wf::color_t> dali_color{"phodius-extras/dali_color"};
 
 class dali_transformer : public wf::scene::view_2d_transformer_t
 {
@@ -402,43 +400,16 @@ class dali_transformer : public wf::scene::view_2d_transformer_t
                 self->program.attrib_pointer("uv_in", 2, 0, uv);
                 self->program.uniform2f("size", bb.width * 1.0, bb.height * 1.0);
                 self->program.uniform1f("progress", 1.0 - progress);
-                self->program.uniform1i("direction", self->progression.get_direction());
-                self->program.uniform1f("flame_speed", dali_flame_speed);
-                self->program.uniform1f("flame_width", dali_flame_width);
-                self->program.uniform1f("flame_height", dali_flame_height);
+                self->program.uniform1f("dali_speed", dali_speed);
+                self->program.uniform1f("dali_height", dali_height);
                 self->program.uniform1f("window_seed", self->window_seed);
-                if (std::string(dali_flame_smoothness) == "softest")
-                {
-                    self->program.uniform1i("flame_smooth_1", 0);
-                    self->program.uniform1i("flame_smooth_2", 0);
-                    self->program.uniform1i("flame_smooth_3", 0);
-                    self->program.uniform1i("flame_smooth_4", 0);
-                } else if (std::string(dali_flame_smoothness) == "soft")
-                {
-                    self->program.uniform1i("flame_smooth_1", 0);
-                    self->program.uniform1i("flame_smooth_2", 1);
-                    self->program.uniform1i("flame_smooth_3", 1);
-                    self->program.uniform1i("flame_smooth_4", 1);
-                } else if (std::string(dali_flame_smoothness) == "hard")
-                {
-                    self->program.uniform1i("flame_smooth_1", 1);
-                    self->program.uniform1i("flame_smooth_2", 1);
-                    self->program.uniform1i("flame_smooth_3", 1);
-                    self->program.uniform1i("flame_smooth_4", 1);
-                } else // "normal"
-                {
-                    self->program.uniform1i("flame_smooth_1", 1);
-                    self->program.uniform1i("flame_smooth_2", 0);
-                    self->program.uniform1i("flame_smooth_3", 1);
-                    self->program.uniform1i("flame_smooth_4", 0);
-                }
 
-                glm::vec4 flame_color{
-                    wf::color_t(dali_flame_color).r,
-                    wf::color_t(dali_flame_color).g,
-                    wf::color_t(dali_flame_color).b,
-                    wf::color_t(dali_flame_color).a};
-                self->program.uniform4f("flame_color", flame_color);
+                glm::vec4 dali_color{
+                    wf::color_t(dali_color).r,
+                    wf::color_t(dali_color).g,
+                    wf::color_t(dali_color).b,
+                    wf::color_t(dali_color).a};
+                self->program.uniform4f("dali_color", dali_color);
 
                 self->program.set_active_texture(tex);
                 GL_CALL(glDrawArrays(GL_TRIANGLE_FAN, 0, 4));
