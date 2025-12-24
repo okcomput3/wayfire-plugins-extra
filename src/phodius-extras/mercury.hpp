@@ -57,11 +57,10 @@ precision highp float;
 varying highp vec2 uvpos;
 uniform vec2 size;
 uniform float progress;
-uniform int direction;
-uniform float flame_speed;
-uniform float flame_width;
-uniform float flame_height;
-uniform vec4 flame_color;
+uniform float mercury_speed;
+uniform float mercury_width;
+uniform float mercury_height;
+uniform vec4 mercury_color;
 
 // ============================================
 // RIPPLE DISSOLUTION EFFECT
@@ -100,7 +99,7 @@ float wave_field(vec2 uv, float time, float freq_base) {
     for (int i = 0; i < 10; i++) {
         float phase_offset = float(i) * 0.7;
         float freq = freq_base * (1.0 + float(i) * 0.1);
-        field += wave(uv, sources[i], time + phase_offset, freq, flame_speed * 0.15);
+        field += wave(uv, sources[i], time + phase_offset, freq, mercury_speed * 0.15);
     }
     
     return field / 10.0; 
@@ -139,7 +138,7 @@ void main()
     }
     
     // Calculate soft edge fade
-    float soft_edge = edge_fade(uvpos, 0.15);
+    float soft_edge = 1.0;
     
     if (soft_edge < 0.001) {
         gl_FragColor = vec4(0.0);
@@ -152,15 +151,14 @@ void main()
     float effect_progress;
     float t;
     
- 
-        effect_progress = progress;
-        t = progress * flame_speed * 0.1;
+    effect_progress = progress;
+    t = progress * mercury_speed * 0.1;
     
     
     vec2 uv = uvpos;
     uv.x *= size.x / size.y;
     
-    float frequency = 1.0 + flame_width * 0.05 * (1.0 - progress);
+    float frequency = 1.0 + mercury_width * 0.05 * (1.0 - progress);
     
     // Compute wave field
     float field = wave_field(uv, t, frequency);
@@ -172,7 +170,7 @@ void main()
     float dissolve_threshold = mix(threshold_min, threshold_max * (1.0 - progress), effect_progress);
     
     // Calculate mask
-    float softness = 0.1 * max(0.01, flame_height);
+    float softness = 0.1 * max(0.01, mercury_height);
     float dissolve = smooth_threshold(field, dissolve_threshold, softness);
     
     float effect_blend = smoothstep(0.0, 0.0, effect_progress);
@@ -198,7 +196,7 @@ void main()
     vec4 tex = get_pixel(final_uv);
     
     // Colors
-    vec3 ripple_color = flame_color.rgb;
+    vec3 ripple_color = mercury_color.rgb;
     vec3 glow_color = mix(ripple_color, vec3(1.0), 0.5); 
     
     // COMPOSITION
@@ -229,11 +227,10 @@ using namespace wf::animation;
 
 static std::string mercury_transformer_name = "mercury";
 
-wf::option_wrapper_t<double> mercury_flame_speed{"phodius-extras/mercury_flame_speed"};
-wf::option_wrapper_t<double> mercury_flame_width{"phodius-extras/mercury_flame_width"};
-wf::option_wrapper_t<double> mercury_flame_height{"phodius-extras/mercury_flame_height"};
-wf::option_wrapper_t<wf::color_t> mercury_flame_color{"phodius-extras/mercury_flame_color"};
-wf::option_wrapper_t<std::string> mercury_flame_smoothness{"phodius-extras/mercury_flame_smoothness"};
+wf::option_wrapper_t<double> mercury_mercury_speed{"phodius-extras/mercury_speed"};
+wf::option_wrapper_t<double> mercury_mercury_width{"phodius-extras/mercury_width"};
+wf::option_wrapper_t<double> mercury_mercury_height{"phodius-extras/mercury_height"};
+wf::option_wrapper_t<wf::color_t> mercury_mercury_color{"phodius-extras/mercury_color"};
 
 class mercury_transformer : public wf::scene::view_2d_transformer_t
 {
@@ -322,42 +319,17 @@ class mercury_transformer : public wf::scene::view_2d_transformer_t
                 self->program.attrib_pointer("uv_in", 2, 0, uv);
                 self->program.uniform2f("size", bb.width * 1.0, bb.height * 1.0);
                 self->program.uniform1f("progress", 1.0 - progress);
-                self->program.uniform1i("direction", self->progression.get_direction());
-                self->program.uniform1f("flame_speed", mercury_flame_speed);
-                self->program.uniform1f("flame_width", mercury_flame_width);
-                self->program.uniform1f("flame_height", mercury_flame_height);
-                if (std::string(mercury_flame_smoothness) == "softest")
-                {
-                    self->program.uniform1i("flame_smooth_1", 0);
-                    self->program.uniform1i("flame_smooth_2", 0);
-                    self->program.uniform1i("flame_smooth_3", 0);
-                    self->program.uniform1i("flame_smooth_4", 0);
-                } else if (std::string(mercury_flame_smoothness) == "soft")
-                {
-                    self->program.uniform1i("flame_smooth_1", 0);
-                    self->program.uniform1i("flame_smooth_2", 1);
-                    self->program.uniform1i("flame_smooth_3", 1);
-                    self->program.uniform1i("flame_smooth_4", 1);
-                } else if (std::string(mercury_flame_smoothness) == "hard")
-                {
-                    self->program.uniform1i("flame_smooth_1", 1);
-                    self->program.uniform1i("flame_smooth_2", 1);
-                    self->program.uniform1i("flame_smooth_3", 1);
-                    self->program.uniform1i("flame_smooth_4", 1);
-                } else // "normal"
-                {
-                    self->program.uniform1i("flame_smooth_1", 1);
-                    self->program.uniform1i("flame_smooth_2", 0);
-                    self->program.uniform1i("flame_smooth_3", 1);
-                    self->program.uniform1i("flame_smooth_4", 0);
-                }
+                self->program.uniform1f("mercury_speed", mercury_mercury_speed);
+                self->program.uniform1f("mercury_width", mercury_mercury_width);
+                self->program.uniform1f("mercury_height", mercury_mercury_height);
+             
 
-                glm::vec4 flame_color{
-                    wf::color_t(mercury_flame_color).r,
-                    wf::color_t(mercury_flame_color).g,
-                    wf::color_t(mercury_flame_color).b,
-                    wf::color_t(mercury_flame_color).a};
-                self->program.uniform4f("flame_color", flame_color);
+                glm::vec4 mercury_color{
+                    wf::color_t(mercury_mercury_color).r,
+                    wf::color_t(mercury_mercury_color).g,
+                    wf::color_t(mercury_mercury_color).b,
+                    wf::color_t(mercury_mercury_color).a};
+                self->program.uniform4f("mercury_color", mercury_color);
 
                 self->program.set_active_texture(tex);
                 GL_CALL(glDrawArrays(GL_TRIANGLE_FAN, 0, 4));
