@@ -95,3 +95,4 @@ workspace_names = shared_module('workspace-names', 'workspace-names.cpp',
     install: true, install_dir: join_paths(get_option('libdir'), 'wayfire'))
 
 subdir('extra-animations')
+subdir('phodius-extras')
